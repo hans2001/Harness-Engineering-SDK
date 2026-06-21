@@ -38,7 +38,7 @@ This project is not another autonomous agent framework. It is the infrastructure
 ## Project News
 
 - `[2026/06]` Added reference-aware eval tasks with `repo_ref` and `reference_paths` so closed-issue benchmarks can run against pre-fix repository states.
-- `[2026/06]` Added first-class agent adapters for `shell`, `mock`, and `codex`.
+- `[2026/06]` Added first-class agent adapters for `shell` and `codex`.
 - `[2026/06]` Added provider-based GitHub issue harvesting with comments, labels, assignees, milestone, linked pull requests, and local dataset materialization.
 - `[2026/06]` Added `harness preflight` and verification-time dependency checks for clearer failure diagnosis in real repository runs.
 
@@ -64,7 +64,7 @@ Harness Runtime is designed for that workflow. It is local-first, repository-nat
 - Verification using ordinary repository commands rather than harness-specific test abstractions
 - Artifact capture for stdout, stderr, diffs, verification logs, and run metadata
 - Local metadata storage through SQLite with a SQLAlchemy ORM layer
-- Adapter-based agent execution, including `shell`, `mock`, and `codex`
+- Adapter-based agent execution, including `shell` and `codex`
 - Dataset materialization from harvested GitHub issues linked to real pull requests
 - Reference-aware task generation through `repo_ref` and `reference_paths`, so eval runs can target pre-fix repository states instead of current `HEAD`
 - Preflight dependency checks so missing tools are surfaced clearly before or during verification
@@ -115,14 +115,14 @@ This creates:
 
 ```bash
 harness init
-harness harvest --from examples/tasks
+harness harvest --from tasks
 harness adapters
-harness run task_001 --adapter mock
+harness run task_001 --adapter shell --agent "codex exec --skip-git-repo-check 'fix the task'"
 harness verify latest --cleanup
 harness report
 ```
 
-The demo task starts with a failing test under `examples/sample_repo`, applies a mock agent fix in an isolated workspace, verifies the result with `pytest`, and writes a local report with linked artifacts.
+The typical flow is: harvest a task from your repository, run an agent in an isolated workspace, verify it with ordinary project commands, and inspect the local artifacts and report.
 
 ## CLI Workflow
 
@@ -130,7 +130,7 @@ The demo task starts with a failing test under `examples/sample_repo`, applies a
 
 ```bash
 harness init
-harness harvest --from examples/tasks
+harness harvest --from tasks
 harness providers
 harness adapters
 harness runs
@@ -140,7 +140,7 @@ harness report
 ### Run and Verify
 
 ```bash
-harness run task_001 --adapter mock
+harness run task_001 --adapter shell --agent "python your_agent.py"
 harness verify latest
 harness preflight task_001
 ```
@@ -150,7 +150,7 @@ harness preflight task_001
 ### Use an Arbitrary Agent Command
 
 ```bash
-harness run task_001 --adapter shell --agent "python examples/mock_agent.py"
+harness run task_001 --adapter shell --agent "python your_agent.py"
 ```
 
 ### Harvest GitHub Issues
@@ -181,14 +181,14 @@ from harness_runtime import Harness
 
 h = Harness(repo=".")
 h.init()
-h.harvest(source="examples/tasks")
+h.harvest(source="tasks")
 h.harvest_issues(provider="github", resource="owner/repo", comment_limit=10)
 h.build_github_eval_dataset(repo_filter="owner/repo")
 h.materialize_eval_tasks(
     target_repo_path="../target-repo",
     repo_filter="owner/repo",
 )
-run = h.run(task_id="task_001", adapter="mock")
+run = h.run(task_id="task_001", adapter="shell", agent="python your_agent.py")
 h.verify(run.id)
 h.report()
 ```
@@ -230,9 +230,7 @@ harness_runtime/
   reports/
   storage/
 examples/
-  tasks/
-  mock_agent.py
-  sample_repo/
+  ...
 tests/
 docs/
 ```
@@ -272,7 +270,6 @@ Implemented issue-provider support:
 Implemented agent adapters:
 
 - `shell`
-- `mock`
 - `codex`
 
 ## Roadmap

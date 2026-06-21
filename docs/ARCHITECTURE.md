@@ -34,7 +34,7 @@ instructions: |
   Fix the failing calculator test.
 verification:
   commands:
-    - python -m pytest examples/sample_repo/tests
+    - pytest
 ```
 
 ### RunRecord
@@ -90,4 +90,3 @@ The harness controls artifact capture and local process execution. It does not c
 4. Dataset versioning, regression gates, flaky-test handling, and CI integration.
 5. Skill/playbook generation from recurring failure modes.
 6. Optional enterprise exporters and policy enforcement.
-

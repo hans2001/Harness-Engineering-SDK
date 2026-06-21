@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from harness_runtime.adapters.base import AgentAdapter
 from harness_runtime.adapters.codex import CodexAdapter
-from harness_runtime.adapters.mock import MockAdapter
 from harness_runtime.adapters.shell import ShellAdapter
 
 
@@ -10,7 +9,6 @@ def list_adapters() -> dict[str, AgentAdapter]:
     return {
         "codex": CodexAdapter(),
         "shell": ShellAdapter(),
-        "mock": MockAdapter(),
     }
 
 
