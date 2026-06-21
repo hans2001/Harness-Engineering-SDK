@@ -1,0 +1,16 @@
+id: task_001
+title: Fix failing calculator test
+source: local
+repo_path: .
+instructions: |
+  The sample calculator repository has a failing pytest check.
+  Fix the implementation so multiplication returns the correct product.
+verification:
+  commands:
+    - python -m pytest examples/sample_repo/tests
+metadata:
+  tags:
+    - demo
+    - pytest
+  difficulty: smoke
+

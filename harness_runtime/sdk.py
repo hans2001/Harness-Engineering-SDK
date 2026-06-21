@@ -1,0 +1,160 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+from harness_runtime.config import init_layout
+from harness_runtime.datasets import build_eval_summary, build_github_reference_dataset, materialize_eval_tasks
+from harness_runtime.harvesters import (
+    create_manual_task,
+    get_issue_provider,
+    harvest_github_issues,
+    harvest_local,
+)
+from harness_runtime.preflight import run_preflight, task_preflight
+from harness_runtime.reports import generate_report
+from harness_runtime.runners import run_task
+from harness_runtime.schemas import (
+    EvalDatasetEntry,
+    EvalSummary,
+    PreflightResult,
+    RunRecord,
+    TaskSpec,
+    VerificationResult,
+    load_task,
+)
+from harness_runtime.storage import Storage
+from harness_runtime.verification import verify_run
+
+
+class Harness:
+    def __init__(self, repo: str | Path = "."):
+        self.repo = Path(repo).resolve()
+
+    def init(self) -> None:
+        init_layout(self.repo)
+        Storage(self.repo)
+
+    def harvest(self, source: str | Path = "tasks") -> list[TaskSpec]:
+        return harvest_local(self.repo, Path(source))
+
+    def harvest_github(
+        self,
+        repo_full_name: str,
+        token: str | None = None,
+        state: str = "open",
+        limit: int = 20,
+        comment_limit: int = 10,
+        verification_commands: list[str] | None = None,
+    ) -> list[TaskSpec]:
+        return harvest_github_issues(
+            self.repo,
+            repo_full_name=repo_full_name,
+            token=token,
+            state=state,
+            limit=limit,
+            comment_limit=comment_limit,
+            verification_commands=verification_commands,
+        )
+
+    def harvest_issues(
+        self,
+        provider: str,
+        resource: str,
+        token: str | None = None,
+        state: str = "open",
+        limit: int = 20,
+        comment_limit: int = 10,
+        verification_commands: list[str] | None = None,
+    ) -> list[TaskSpec]:
+        issue_provider = get_issue_provider(provider)
+        return issue_provider.harvest(
+            self.repo,
+            resource,
+            token,
+            state,
+            limit,
+            comment_limit,
+            verification_commands,
+        )
+
+    def harvest_manual(
+        self,
+        title: str,
+        instructions: str,
+        verification_commands: list[str] | None = None,
+    ) -> TaskSpec:
+        return create_manual_task(self.repo, title, instructions, verification_commands)
+
+    def run(
+        self,
+        task_id: str,
+        agent: str | None = None,
+        adapter: str = "shell",
+        timeout: int | None = None,
+        keep_workspace: bool = True,
+    ) -> RunRecord:
+        task = self.load_task(task_id)
+        return run_task(
+            self.repo,
+            task,
+            agent,
+            adapter_name=adapter,
+            timeout=timeout,
+            keep_workspace=keep_workspace,
+        )
+
+    def verify(self, run_id: str, cleanup: bool = False) -> VerificationResult:
+        storage = Storage(self.repo)
+        resolved_run_id = storage.resolve_run_id(run_id)
+        run = storage.get_run(resolved_run_id)
+        task = self.load_task(run.task_id)
+        return verify_run(self.repo, resolved_run_id, task, cleanup=cleanup)
+
+    def preflight(self, task_id: str | None = None, commands: list[str] | None = None) -> PreflightResult:
+        if task_id is not None:
+            return task_preflight(self.repo, self.load_task(task_id))
+        return run_preflight(self.repo, commands or [])
+
+    def runs(self) -> list[RunRecord]:
+        return Storage(self.repo).list_runs()
+
+    def eval(
+        self,
+        agent: str | None = None,
+        adapter: str = "shell",
+        timeout: int | None = None,
+    ) -> EvalSummary:
+        if agent or adapter != "shell":
+            for task in Storage(self.repo).list_tasks():
+                run = self.run(task.id, agent=agent, adapter=adapter, timeout=timeout)
+                self.verify(run.id, cleanup=True)
+        return build_eval_summary(self.repo)
+
+    def build_github_eval_dataset(
+        self,
+        repo_filter: str | None = None,
+        limit: int | None = None,
+    ) -> list[EvalDatasetEntry]:
+        return build_github_reference_dataset(self.repo, repo_filter=repo_filter, limit=limit)
+
+    def materialize_eval_tasks(
+        self,
+        target_repo_path: str,
+        repo_filter: str | None = None,
+        verification_commands: list[str] | None = None,
+        limit: int | None = None,
+    ) -> list[TaskSpec]:
+        return materialize_eval_tasks(
+            self.repo,
+            repo_filter=repo_filter,
+            target_repo_path=target_repo_path,
+            verification_commands=verification_commands,
+            limit=limit,
+        )
+
+    def report(self) -> Path:
+        return generate_report(self.repo)
+
+    def load_task(self, task_id: str) -> TaskSpec:
+        path = Storage(self.repo).get_task_path(task_id)
+        return load_task(path)
