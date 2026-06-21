@@ -2,11 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from harness_runtime.benchmark import run_reference_benchmark
 from harness_runtime.config import init_layout
 from harness_runtime.datasets import build_eval_summary, build_github_reference_dataset, materialize_eval_tasks
 from harness_runtime.harvesters import (
+    clear_github_cache,
     create_manual_task,
     get_issue_provider,
+    github_cache_stats,
     harvest_github_issues,
     harvest_local,
 )
@@ -16,6 +19,7 @@ from harness_runtime.runners import run_task
 from harness_runtime.schemas import (
     EvalDatasetEntry,
     EvalSummary,
+    BenchmarkSummary,
     PreflightResult,
     RunRecord,
     TaskSpec,
@@ -45,6 +49,7 @@ class Harness:
         limit: int = 20,
         comment_limit: int = 10,
         verification_commands: list[str] | None = None,
+        refresh_cache: bool = False,
     ) -> list[TaskSpec]:
         return harvest_github_issues(
             self.repo,
@@ -54,6 +59,7 @@ class Harness:
             limit=limit,
             comment_limit=comment_limit,
             verification_commands=verification_commands,
+            refresh_cache=refresh_cache,
         )
 
     def harvest_issues(
@@ -65,6 +71,7 @@ class Harness:
         limit: int = 20,
         comment_limit: int = 10,
         verification_commands: list[str] | None = None,
+        refresh_cache: bool = False,
     ) -> list[TaskSpec]:
         issue_provider = get_issue_provider(provider)
         return issue_provider.harvest(
@@ -75,6 +82,7 @@ class Harness:
             limit,
             comment_limit,
             verification_commands,
+            refresh_cache,
         )
 
     def harvest_manual(
@@ -154,6 +162,34 @@ class Harness:
 
     def report(self) -> Path:
         return generate_report(self.repo)
+
+    def github_cache_stats(self) -> dict[str, int]:
+        return github_cache_stats(self.repo)
+
+    def clear_github_cache(self) -> int:
+        return clear_github_cache(self.repo)
+
+    def benchmark(
+        self,
+        *,
+        repo_filter: str,
+        target_repo_path: str,
+        adapter: str,
+        agent: str | None = None,
+        limit: int | None = None,
+        verification_commands: list[str] | None = None,
+        timeout: int | None = None,
+    ) -> BenchmarkSummary:
+        return run_reference_benchmark(
+            self.repo,
+            repo_filter=repo_filter,
+            target_repo_path=target_repo_path,
+            adapter=adapter,
+            agent=agent,
+            limit=limit,
+            verification_commands=verification_commands,
+            timeout=timeout,
+        )
 
     def load_task(self, task_id: str) -> TaskSpec:
         path = Storage(self.repo).get_task_path(task_id)

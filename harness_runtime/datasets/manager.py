@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from harness_runtime.config import harness_dir
+from harness_runtime.repo import is_git_repo, resolve_github_pull_request_baseline
 from harness_runtime.schemas import EvalDatasetEntry, EvalSummary, TaskSpec, VerificationSpec, dump_task
 from harness_runtime.storage import Storage
 from harness_runtime.verification.profiles import suggest_verification_commands
@@ -87,6 +88,7 @@ def task_to_eval_entry(task: TaskSpec) -> EvalDatasetEntry:
     linked_pull_requests = metadata.get("linked_pull_requests") or []
     linked_numbers = [item.get("number") for item in linked_pull_requests if isinstance(item.get("number"), int)]
     linked_urls = [item.get("url") for item in linked_pull_requests if item.get("url")]
+    inferred_repo_ref = task.repo_ref or infer_repo_ref(linked_pull_requests)
     reference_paths = merge_reference_paths(
         metadata.get("reference_paths") or [],
         collect_reference_paths(linked_pull_requests),
@@ -96,7 +98,7 @@ def task_to_eval_entry(task: TaskSpec) -> EvalDatasetEntry:
         title=task.title,
         source=str(task.source),
         repo_full_name=metadata.get("repo_full_name", ""),
-        repo_ref=task.repo_ref,
+        repo_ref=inferred_repo_ref,
         issue_number=metadata.get("issue_number"),
         issue_url=metadata.get("issue_url"),
         instructions=task.instructions,
@@ -114,6 +116,7 @@ def task_to_eval_entry(task: TaskSpec) -> EvalDatasetEntry:
             "created_at": metadata.get("created_at"),
             "updated_at": metadata.get("updated_at"),
             "closed_at": metadata.get("closed_at"),
+            "repo_ref_source": "explicit" if task.repo_ref else ("inferred" if inferred_repo_ref else None),
         },
     )
 
@@ -132,13 +135,14 @@ def materialize_eval_tasks(
     storage = Storage(repo)
     tasks: list[TaskSpec] = []
     for entry in entries:
+        resolved_repo_ref = entry.repo_ref or resolve_materialization_repo_ref(Path(repo / target_repo_path), entry)
         instructions = render_eval_instructions(entry)
         seed_task = TaskSpec(
             id=entry.task_id,
             title=entry.title,
             source=entry.source,
             repo_path=target_repo_path,
-            repo_ref=entry.repo_ref,
+            repo_ref=resolved_repo_ref,
             instructions=instructions,
             verification=VerificationSpec(commands=list(entry.verification_commands)),
             metadata={
@@ -161,7 +165,7 @@ def materialize_eval_tasks(
             title=entry.title,
             source=entry.source,
             repo_path=target_repo_path,
-            repo_ref=entry.repo_ref,
+            repo_ref=resolved_repo_ref,
             instructions=instructions,
             verification=VerificationSpec(commands=resolved_verification),
             metadata={
@@ -198,6 +202,28 @@ def merge_reference_paths(*groups: list[str]) -> list[str]:
             seen.add(path)
             merged.append(path)
     return merged
+
+
+def infer_repo_ref(linked_pull_requests: list[dict]) -> str | None:
+    for pull_request in linked_pull_requests:
+        baseline_sha = pull_request.get("baseline_sha")
+        if isinstance(baseline_sha, str) and baseline_sha:
+            return baseline_sha
+    return None
+
+
+def resolve_materialization_repo_ref(target_repo_path: Path, entry: EvalDatasetEntry) -> str | None:
+    repo_ref_source = entry.metadata.get("repo_ref_source")
+    if repo_ref_source == "explicit" and entry.repo_ref:
+        return entry.repo_ref
+    if entry.source != "github":
+        return entry.repo_ref
+    if target_repo_path.exists() and is_git_repo(target_repo_path):
+        for pull_request_number in entry.linked_pull_request_numbers:
+            resolved = resolve_github_pull_request_baseline(target_repo_path, pull_request_number)
+            if resolved:
+                return resolved
+    return entry.repo_ref
 
 
 def render_eval_instructions(entry: EvalDatasetEntry) -> str:

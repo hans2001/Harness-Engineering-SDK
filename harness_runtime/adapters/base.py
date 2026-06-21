@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from harness_runtime.config import HarnessConfig
+
 
 @dataclass
 class AdapterExecution:
@@ -20,8 +22,9 @@ class AgentAdapter:
         *,
         repo: Path,
         workspace_path: Path,
+        artifact_path: Path,
         agent_input: str | None,
         env: dict[str, str],
+        config: HarnessConfig,
     ) -> AdapterExecution:
         raise NotImplementedError
-

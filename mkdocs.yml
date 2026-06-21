@@ -1,0 +1,47 @@
+site_name: Harness Runtime
+site_description: SDK and local runtime for repo-native harness engineering
+site_url: https://hans2001.github.io/Harness-Engineering-SDK/
+repo_url: https://github.com/hans2001/Harness-Engineering-SDK
+repo_name: hans2001/Harness-Engineering-SDK
+
+theme:
+  name: material
+  logo: logo.svg
+  features:
+    - navigation.instant
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+    - search.highlight
+
+nav:
+  - Home: index.md
+  - Quick Start: quickstart.md
+  - Concepts: concepts.md
+  - SDK: sdk.md
+  - CLI: cli.md
+  - Benchmarks: benchmarks.md
+  - Architecture: architecture.md
+  - Deep Dives:
+      - Core Abstractions: CORE_ABSTRACTIONS.md
+      - Plugin System: PLUGIN_SYSTEM.md
+      - Multi-Language Model: MULTI_LANGUAGE.md
+      - Core vs Plugin: CORE_VS_PLUGIN.md
+      - SDK Surface Notes: SDK_SURFACE.md
+
+extra_css:
+  - stylesheets/extra.css
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true

@@ -1,0 +1,20 @@
+id: github_example_smoke_002
+title: Enable feature flag
+source: github
+repo_path: .
+instructions: |
+  Update `feature_flag.txt` so the file contains `enabled` instead of `disabled`.
+verification:
+  commands:
+    - python -c "from pathlib import Path; raise SystemExit(0 if Path('feature_flag.txt').read_text().strip() == 'enabled' else 1)"
+metadata:
+  repo_full_name: example/smoke
+  issue_number: 2
+  issue_url: https://example.invalid/issues/2
+  reference_paths:
+    - feature_flag.txt
+  linked_pull_requests:
+    - number: 2
+      title: Enable feature flag
+      url: https://example.invalid/pull/2
+      state: closed

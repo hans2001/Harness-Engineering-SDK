@@ -3,11 +3,11 @@ from __future__ import annotations
 import shlex
 from pathlib import Path
 
-from harness_runtime.config import HarnessConfig
 from harness_runtime.adapters.base import AdapterExecution, AgentAdapter
+from harness_runtime.config import HarnessConfig
 
 
-def build_codex_prompt(
+def build_cursor_prompt(
     instructions: str,
     *,
     max_runtime_seconds: int,
@@ -32,8 +32,8 @@ def build_codex_prompt(
     )
 
 
-class CodexAdapter(AgentAdapter):
-    name = "codex"
+class CursorAdapter(AgentAdapter):
+    name = "cursor"
 
     def build_execution(
         self,
@@ -45,39 +45,30 @@ class CodexAdapter(AgentAdapter):
         env: dict[str, str],
         config: HarnessConfig,
     ) -> AdapterExecution:
-        prompt = build_codex_prompt(
+        prompt = build_cursor_prompt(
             agent_input or env.get("HARNESS_INSTRUCTIONS", ""),
             max_runtime_seconds=config.task_budget.max_runtime_seconds,
             max_steps=config.task_budget.max_steps,
             max_patch_lines=config.task_budget.max_patch_lines,
         )
-        codex_config = config.codex
-        last_message_path = artifact_path / "agent_last_message.txt"
+        cursor_config = config.cursor
         command_parts = [
-            "codex",
-            "exec",
-            "-C",
+            shlex.quote(cursor_config.binary),
+            "--print",
+            "--trust",
+            "--workspace",
             shlex.quote(str(workspace_path)),
-            "--skip-git-repo-check",
-            "--sandbox",
-            shlex.quote(codex_config.sandbox),
-            "--color",
-            shlex.quote(codex_config.color),
         ]
-        if codex_config.json_output:
-            command_parts.append("--json")
-        if codex_config.ephemeral:
-            command_parts.append("--ephemeral")
-        if codex_config.ignore_user_config:
-            command_parts.append("--ignore-user-config")
-        if codex_config.ignore_rules:
-            command_parts.append("--ignore-rules")
-        if codex_config.output_last_message:
-            command_parts.extend(["-o", shlex.quote(str(last_message_path))])
-        if codex_config.model:
-            command_parts.extend(["--model", shlex.quote(codex_config.model)])
-        if codex_config.profile:
-            command_parts.extend(["--profile", shlex.quote(codex_config.profile)])
+        if cursor_config.force:
+            command_parts.append("--force")
+        if cursor_config.output_format:
+            command_parts.extend(["--output-format", shlex.quote(cursor_config.output_format)])
+        if cursor_config.sandbox:
+            command_parts.extend(["--sandbox", shlex.quote(cursor_config.sandbox)])
+        if cursor_config.model:
+            command_parts.extend(["--model", shlex.quote(cursor_config.model)])
+        if cursor_config.mode:
+            command_parts.extend(["--mode", shlex.quote(cursor_config.mode)])
         command_parts.append(shlex.quote(prompt))
         command = " ".join(command_parts)
         return AdapterExecution(command=command, cwd=workspace_path, env=env, shell=True)

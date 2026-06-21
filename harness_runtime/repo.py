@@ -17,6 +17,18 @@ def run_git(repo: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
     )
 
 
+def resolve_github_pull_request_baseline(repo_path: Path, pull_request_number: int) -> str | None:
+    if pull_request_number <= 0:
+        return None
+    fetch = run_git(repo_path, ["fetch", "origin", f"pull/{pull_request_number}/head"])
+    if fetch.returncode != 0:
+        return None
+    parent = run_git(repo_path, ["rev-parse", "FETCH_HEAD^"])
+    if parent.returncode != 0:
+        return None
+    return parent.stdout.strip() or None
+
+
 def is_git_repo(path: Path) -> bool:
     result = run_git(path, ["rev-parse", "--is-inside-work-tree"])
     return result.returncode == 0 and result.stdout.strip() == "true"
@@ -50,6 +62,10 @@ def create_workspace(
     # an untracked subdirectory inside a larger git repo, a worktree would omit it.
     if git_root(repo_path) == repo_path.resolve():
         result = run_git(repo_path, ["worktree", "add", "--detach", str(workspace_path), ref])
+        if result.returncode != 0 and ref != "HEAD" and looks_like_commit_sha(ref):
+            fetch = run_git(repo_path, ["fetch", "origin", ref])
+            if fetch.returncode == 0:
+                result = run_git(repo_path, ["worktree", "add", "--detach", str(workspace_path), ref])
         if result.returncode == 0:
             return "git_worktree", current_sha(workspace_path)
 
@@ -61,6 +77,12 @@ def create_workspace(
     ignore = shutil.ignore_patterns(*ignore_patterns)
     shutil.copytree(repo_path, workspace_path, ignore=ignore)
     return "copy", None
+
+
+def looks_like_commit_sha(value: str) -> bool:
+    if len(value) < 7:
+        return False
+    return all(char in "0123456789abcdef" for char in value.lower())
 
 
 def cleanup_workspace(repo_path: Path, workspace_path: Path) -> None:

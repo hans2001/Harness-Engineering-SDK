@@ -73,6 +73,18 @@ def test_github_harvest_creates_tasks(tmp_path, monkeypatch):
       }
     ]
     """
+    pr_commits_payload = """
+    [
+      {
+        "sha": "commit_head_sha",
+        "parents": [
+          {
+            "sha": "baseline_parent_sha"
+          }
+        ]
+      }
+    ]
+    """
 
     def fake_urlopen(request):
         url = request.full_url
@@ -84,6 +96,8 @@ def test_github_harvest_creates_tasks(tmp_path, monkeypatch):
             return FakeResponse(timeline_payload)
         if "/pulls/45/files?per_page=20&page=1" in url:
             return FakeResponse(pr_files_payload)
+        if "/pulls/45/commits?per_page=100&page=1" in url:
+            return FakeResponse(pr_commits_payload)
         raise AssertionError(f"Unexpected URL: {url}")
 
     monkeypatch.setattr(github_harvester, "urlopen", fake_urlopen)
@@ -110,6 +124,109 @@ def test_github_harvest_creates_tasks(tmp_path, monkeypatch):
         "python/widgets/parser.py",
         "tests/test_parser.py",
     ]
+    assert tasks[0].metadata["linked_pull_requests"][0]["baseline_sha"] == "baseline_parent_sha"
+    assert tasks[0].metadata["linked_pull_requests"][0]["head_sha"] == "commit_head_sha"
     assert "Issue comments:" in tasks[0].instructions
     assert "Linked pull requests:" in tasks[0].instructions
     assert "touched files:" in tasks[0].instructions
+
+
+def test_github_harvest_uses_cache_on_repeat_calls(tmp_path, monkeypatch):
+    issues_payload = """
+    [
+      {
+        "number": 12,
+        "title": "Fix flaky parser",
+        "body": "The parser fails on empty input.",
+        "html_url": "https://github.com/acme/widgets/issues/12",
+        "labels": [],
+        "assignees": [],
+        "milestone": null,
+        "user": {"login": "reporter"},
+        "state": "open",
+        "state_reason": null,
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-02T00:00:00Z",
+        "closed_at": null
+      }
+    ]
+    """
+    calls = {"count": 0}
+
+    def fake_urlopen(request):
+        calls["count"] += 1
+        return FakeResponse(issues_payload)
+
+    monkeypatch.setattr(github_harvester, "urlopen", fake_urlopen)
+
+    harness = Harness(tmp_path)
+    harness.init()
+    first = harness.harvest_github(repo_full_name="acme/widgets", token="test-token", comment_limit=0)
+    second = harness.harvest_github(repo_full_name="acme/widgets", token="test-token", comment_limit=0)
+
+    assert len(first) == 1
+    assert len(second) == 1
+    assert calls["count"] == 2
+
+
+def test_github_harvest_limits_detail_enrichment_without_token(tmp_path, monkeypatch):
+    issues_payload = """
+    [
+      {
+        "number": 12,
+        "title": "Task 12",
+        "body": "Issue 12",
+        "html_url": "https://github.com/acme/widgets/issues/12",
+        "labels": [],
+        "assignees": [],
+        "milestone": null,
+        "user": {"login": "reporter"},
+        "state": "open",
+        "state_reason": null,
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-02T00:00:00Z",
+        "closed_at": null
+      },
+      {
+        "number": 13,
+        "title": "Task 13",
+        "body": "Issue 13",
+        "html_url": "https://github.com/acme/widgets/issues/13",
+        "labels": [],
+        "assignees": [],
+        "milestone": null,
+        "user": {"login": "reporter"},
+        "state": "open",
+        "state_reason": null,
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-01-02T00:00:00Z",
+        "closed_at": null
+      }
+    ]
+    """
+    timeline_payload = "[]"
+    calls = {"issues": 0, "timeline": 0}
+
+    def fake_urlopen(request):
+        url = request.full_url
+        if "/issues?state=open&per_page=30&page=1" in url:
+            calls["issues"] += 1
+            return FakeResponse(issues_payload)
+        if url.endswith("/issues/12/timeline") or url.endswith("/issues/13/timeline"):
+            calls["timeline"] += 1
+            return FakeResponse(timeline_payload)
+        raise AssertionError(f"Unexpected URL: {url}")
+
+    monkeypatch.setattr(github_harvester, "urlopen", fake_urlopen)
+
+    harness = Harness(tmp_path)
+    harness.init()
+    config_path = tmp_path / ".harness" / "config.yaml"
+    config_text = config_path.read_text() + "github_unauthenticated_detail_budget: 1\n"
+    config_path.write_text(config_text)
+
+    tasks = harness.harvest_github(repo_full_name="acme/widgets", token=None, comment_limit=0)
+
+    assert len(tasks) == 2
+    assert calls["issues"] == 1
+    assert calls["timeline"] == 1

@@ -13,10 +13,11 @@ class ShellAdapter(AgentAdapter):
         *,
         repo: Path,
         workspace_path: Path,
+        artifact_path: Path,
         agent_input: str | None,
         env: dict[str, str],
+        config: object,
     ) -> AdapterExecution:
         if not agent_input:
             raise ValueError("Shell adapter requires an agent command.")
         return AdapterExecution(command=agent_input, cwd=workspace_path, env=env, shell=True)
-

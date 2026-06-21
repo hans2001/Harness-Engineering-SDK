@@ -1,0 +1,20 @@
+id: github_example_smoke_001
+title: Fix state marker
+source: github
+repo_path: .
+instructions: |
+  Update `state.txt` so the file contains `fixed` instead of `broken`.
+verification:
+  commands:
+    - python -c "from pathlib import Path; raise SystemExit(0 if Path('state.txt').read_text().strip() == 'fixed' else 1)"
+metadata:
+  repo_full_name: example/smoke
+  issue_number: 1
+  issue_url: https://example.invalid/issues/1
+  reference_paths:
+    - state.txt
+  linked_pull_requests:
+    - number: 1
+      title: Fix state marker
+      url: https://example.invalid/pull/1
+      state: closed

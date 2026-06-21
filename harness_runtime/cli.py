@@ -50,6 +50,7 @@ def harvest(
     issue_state: str = typer.Option("open", "--issue-state", help="Issue state filter."),
     issue_limit: int = typer.Option(20, "--issue-limit", help="Maximum number of issues to import."),
     issue_comment_limit: int = typer.Option(10, "--issue-comment-limit", help="Maximum number of issue comments to import."),
+    refresh_cache: bool = typer.Option(False, "--refresh-cache", help="Ignore cached GitHub responses for this harvest run."),
     github_repo: str | None = typer.Option(None, "--github-repo", help="GitHub repository in owner/name form."),
     github_token: str | None = typer.Option(None, "--github-token", help="GitHub token. Defaults to GITHUB_TOKEN."),
     github_state: str = typer.Option("open", "--github-state", help="GitHub issue state filter."),
@@ -72,6 +73,7 @@ def harvest(
             limit=issue_limit,
             comment_limit=issue_comment_limit,
             verification_commands=verification,
+            refresh_cache=refresh_cache,
         )
     elif github_repo is not None:
         tasks = harness.harvest_github(
@@ -81,6 +83,7 @@ def harvest(
             limit=github_limit,
             comment_limit=github_comment_limit,
             verification_commands=verification,
+            refresh_cache=refresh_cache,
         )
     elif title and instructions:
         tasks = [harness.harvest_manual(title, instructions, verification)]
@@ -101,6 +104,26 @@ def list_providers() -> None:
     table = Table("Provider", "Token Env Var")
     for provider in issue_providers().values():
         table.add_row(provider.name, provider.env_token_var)
+    console.print(table)
+
+
+@app.command("cache")
+def cache_command(
+    target: str = typer.Argument("github", help="Cache namespace."),
+    clear: bool = typer.Option(False, "--clear", help="Delete cached entries for the namespace."),
+    repo: Path = typer.Option(Path("."), help="Repository root."),
+) -> None:
+    """Inspect or clear local harness caches."""
+    if target != "github":
+        raise typer.BadParameter("Supported cache namespaces: github")
+    harness = get_harness(repo)
+    if clear:
+        removed = harness.clear_github_cache()
+        console.print(f"Removed GitHub cache entries: {removed}")
+        return
+    stats = harness.github_cache_stats()
+    table = Table("Namespace", "Entries", "Bytes")
+    table.add_row("github", str(stats["entries"]), str(stats["bytes"]))
     console.print(table)
 
 
@@ -159,6 +182,36 @@ def dataset_command(
         )
         console.print(f"Materialized tasks: {len(tasks)}")
         console.print(f"Task output: {Path(repo).resolve() / '.harness' / 'tasks' / 'generated'}")
+
+
+@app.command("benchmark")
+def benchmark_command(
+    repo_filter: str = typer.Option(..., "--repo-filter", help="Repository full name to benchmark."),
+    target_repo_path: str = typer.Option(..., "--target-repo-path", help="Target repo checkout to benchmark against."),
+    adapter: str = typer.Option("shell", "--adapter", help="Agent adapter to use."),
+    agent: str | None = typer.Option(None, "--agent", "-a", help="Agent command for adapters that require one."),
+    limit: int | None = typer.Option(None, "--limit", help="Maximum number of tasks to run."),
+    verification: list[str] | None = typer.Option(None, "--verify", help="Override verification commands."),
+    timeout: int | None = typer.Option(None, help="Agent timeout in seconds."),
+    repo: Path = typer.Option(Path("."), help="Repository root."),
+) -> None:
+    """Run a reference-backed benchmark loop for harvested GitHub tasks."""
+    summary = get_harness(repo).benchmark(
+        repo_filter=repo_filter,
+        target_repo_path=target_repo_path,
+        adapter=adapter,
+        agent=agent,
+        limit=limit,
+        verification_commands=verification,
+        timeout=timeout,
+    )
+    console.print(f"Benchmark: {summary.benchmark_id}")
+    console.print(f"Tasks: {summary.total_tasks}")
+    console.print(f"Executed runs: {summary.executed_runs}")
+    console.print(f"Verified runs: {summary.verified_runs}")
+    console.print(f"Passed runs: {summary.passed_runs}")
+    if summary.report_path:
+        console.print(f"Report: {summary.report_path}")
 
 
 @app.command()

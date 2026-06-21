@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -66,27 +67,50 @@ def run_task(
         {
             "HARNESS_RUN_ID": run_id,
             "HARNESS_TASK_ID": task.id,
+            "HARNESS_TASK_TITLE": task.title,
             "HARNESS_WORKSPACE": str(workspace_path),
             "HARNESS_INSTRUCTIONS": task.instructions,
+            "HARNESS_TASK_METADATA_JSON": json.dumps(task.metadata),
+            "HARNESS_REFERENCE_PATHS_JSON": json.dumps(task.metadata.get("reference_paths") or []),
+            "HARNESS_TASK_BUDGET_MAX_RUNTIME_SECONDS": str(config.task_budget.max_runtime_seconds),
+            "HARNESS_TASK_BUDGET_MAX_STEPS": str(config.task_budget.max_steps),
+            "HARNESS_TASK_BUDGET_MAX_PATCH_LINES": str(config.task_budget.max_patch_lines),
         }
     )
     execution = adapter.build_execution(
         repo=repo,
         workspace_path=workspace_path,
+        artifact_path=artifact_path,
         agent_input=agent_input,
         env=env,
+        config=config,
     )
 
-    result = subprocess.run(
-        execution.command,
-        cwd=execution.cwd,
-        shell=execution.shell,
-        text=True,
-        capture_output=True,
-        timeout=timeout,
-        env=execution.env,
-        check=False,
-    )
+    effective_timeout = timeout or config.task_budget.max_runtime_seconds
+    timed_out = False
+    timeout_note = None
+    try:
+        result = subprocess.run(
+            execution.command,
+            cwd=execution.cwd,
+            shell=execution.shell,
+            text=True,
+            capture_output=True,
+            timeout=effective_timeout,
+            env=execution.env,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as error:
+        timed_out = True
+        timeout_note = f"Agent timed out after {effective_timeout}s."
+        stdout_text = normalize_subprocess_output(error.stdout)
+        stderr_text = normalize_subprocess_output(error.stderr)
+        result = subprocess.CompletedProcess(
+            args=error.cmd,
+            returncode=124,
+            stdout=stdout_text,
+            stderr=stderr_text + ("\n" if stderr_text else "") + timeout_note,
+        )
     duration = time.monotonic() - start
 
     Path(run.stdout_path).write_text(redact(result.stdout))
@@ -99,6 +123,10 @@ def run_task(
     run.exit_code = result.returncode
     run.duration_seconds = duration
     run.ended_at = utc_now()
+    if timed_out and timeout_note:
+        run.metadata["timed_out"] = True
+        run.metadata["timeout_seconds"] = effective_timeout
+        run.metadata["failure_reason"] = timeout_note
     if not keep_workspace:
         cleanup_workspace(task_repo_path, workspace_path)
         run.metadata["workspace_removed"] = True
@@ -118,6 +146,14 @@ def allowed_env(source: os._Environ[str], allowlist: list[str]) -> dict[str, str
 def prepend_current_python_bin(path: str) -> str:
     python_bin = str(Path(sys.executable).parent)
     return f"{python_bin}{os.pathsep}{path}" if path else python_bin
+
+
+def normalize_subprocess_output(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
 
 
 def redact(text: str) -> str:

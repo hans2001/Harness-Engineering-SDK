@@ -108,6 +108,41 @@ class EvalSummary(BaseModel):
     regressions: list[str] = Field(default_factory=list)
 
 
+class BenchmarkTaskResult(BaseModel):
+    task_id: str
+    title: str
+    repo_full_name: str
+    repo_ref: str | None = None
+    preflight_passed: bool
+    run_id: str | None = None
+    run_status: str | None = None
+    run_duration_seconds: float | None = None
+    verification_passed: bool | None = None
+    verification_failed_commands: list[str] = Field(default_factory=list)
+    artifact_path: str | None = None
+    failure_notes: list[str] = Field(default_factory=list)
+
+
+class BenchmarkSummary(BaseModel):
+    benchmark_id: str
+    kind: str
+    repo_filter: str | None = None
+    target_repo_path: str
+    adapter: str
+    total_tasks: int
+    executed_runs: int
+    verified_runs: int
+    passed_runs: int
+    task_results: list[BenchmarkTaskResult] = Field(default_factory=list)
+    report_path: str | None = None
+
+    @property
+    def pass_rate(self) -> float:
+        if self.verified_runs == 0:
+            return 0.0
+        return self.passed_runs / self.verified_runs
+
+
 class EvalDatasetEntry(BaseModel):
     task_id: str
     title: str

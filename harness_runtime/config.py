@@ -10,11 +10,43 @@ from pydantic import BaseModel, Field
 HARNESS_DIR = ".harness"
 
 
+class TaskBudgetConfig(BaseModel):
+    max_runtime_seconds: int = 900
+    max_steps: int = 12
+    max_patch_lines: int = 400
+
+
+class CodexExecConfig(BaseModel):
+    model: str | None = None
+    profile: str | None = None
+    sandbox: str = "workspace-write"
+    color: str = "never"
+    json_output: bool = True
+    ephemeral: bool = True
+    ignore_user_config: bool = True
+    ignore_rules: bool = True
+    output_last_message: bool = True
+
+
+class CursorAgentConfig(BaseModel):
+    binary: str = "agent"
+    model: str | None = None
+    mode: str | None = None
+    sandbox: str | None = None
+    output_format: str = "text"
+    force: bool = True
+
+
 class HarnessConfig(BaseModel):
     version: int = 1
     default_agent: str | None = None
     verification_commands: list[str] = Field(default_factory=lambda: ["pytest"])
     artifact_retention_days: int = 30
+    github_cache_ttl_seconds: int = 21600
+    github_unauthenticated_detail_budget: int = 5
+    task_budget: TaskBudgetConfig = Field(default_factory=TaskBudgetConfig)
+    codex: CodexExecConfig = Field(default_factory=CodexExecConfig)
+    cursor: CursorAgentConfig = Field(default_factory=CursorAgentConfig)
     privacy: dict[str, Any] = Field(
         default_factory=lambda: {
             "mode": "local_only",
@@ -73,4 +105,3 @@ def init_layout(repo: Path) -> None:
     ]:
         (root / name).mkdir(parents=True, exist_ok=True)
     write_config(repo)
-
