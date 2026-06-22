@@ -143,6 +143,92 @@ class BenchmarkSummary(BaseModel):
         return self.passed_runs / self.verified_runs
 
 
+class TraceEventKind(StrEnum):
+    run_started = "run_started"
+    agent_completed = "agent_completed"
+    verification_started = "verification_started"
+    verification_command_finished = "verification_command_finished"
+    verification_finished = "verification_finished"
+    diagnosis = "diagnosis"
+
+
+class HarnessTraceEvent(BaseModel):
+    event: TraceEventKind | str
+    timestamp: datetime = Field(default_factory=utc_now)
+    run_id: str
+    task_id: str | None = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class HarnessTrace(BaseModel):
+    trace_id: str
+    run_id: str
+    task_id: str
+    repo: str
+    created_at: datetime = Field(default_factory=utc_now)
+    events: list[HarnessTraceEvent] = Field(default_factory=list)
+    failure_tags: list[str] = Field(default_factory=list)
+    failure_summary: str | None = None
+    trace_path: str | None = None
+
+
+class HarnessPatchKind(StrEnum):
+    skill = "skill"
+    policy = "policy"
+    verification_hint = "verification_hint"
+
+
+class HarnessPatchStatus(StrEnum):
+    proposed = "proposed"
+    promoted = "promoted"
+    rejected = "rejected"
+
+
+class HarnessPatchPrediction(BaseModel):
+    expected_fixes: list[str] = Field(default_factory=list)
+    at_risk_regressions: list[str] = Field(default_factory=list)
+    rationale: str = ""
+
+
+class HarnessPatch(BaseModel):
+    patch_id: str
+    round_id: str
+    kind: HarnessPatchKind = HarnessPatchKind.skill
+    target_path: str
+    title: str
+    content: str
+    evidence_run_ids: list[str] = Field(default_factory=list)
+    evidence_task_ids: list[str] = Field(default_factory=list)
+    failure_tags: list[str] = Field(default_factory=list)
+    prediction: HarnessPatchPrediction = Field(default_factory=HarnessPatchPrediction)
+    status: HarnessPatchStatus = HarnessPatchStatus.proposed
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class FlywheelRound(BaseModel):
+    round_id: str
+    round_number: int
+    started_at: datetime = Field(default_factory=utc_now)
+    ended_at: datetime | None = None
+    benchmark_id: str | None = None
+    pass_rate_before: float | None = None
+    pass_rate_after: float | None = None
+    patches_proposed: list[str] = Field(default_factory=list)
+    patches_promoted: list[str] = Field(default_factory=list)
+    patches_rejected: list[str] = Field(default_factory=list)
+    task_ids: list[str] = Field(default_factory=list)
+    adapter: str = "shell"
+    report_path: str | None = None
+
+
+class FlywheelSummary(BaseModel):
+    flywheel_id: str
+    rounds: list[FlywheelRound] = Field(default_factory=list)
+    initial_pass_rate: float = 0.0
+    final_pass_rate: float = 0.0
+    report_path: str | None = None
+
+
 class EvalDatasetEntry(BaseModel):
     task_id: str
     title: str

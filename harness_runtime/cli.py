@@ -214,6 +214,83 @@ def benchmark_command(
         console.print(f"Report: {summary.report_path}")
 
 
+flywheel_app = typer.Typer(help="Closed-loop harness improvement flywheel.")
+app.add_typer(flywheel_app, name="flywheel")
+
+
+@flywheel_app.command("run")
+def flywheel_run_command(
+    repo_filter: str = typer.Option(..., "--repo-filter", help="Repository full name to train against."),
+    target_repo_path: str = typer.Option(..., "--target-repo-path", help="Target repo checkout."),
+    adapter: str = typer.Option("shell", "--adapter", help="Agent adapter to use."),
+    agent: str | None = typer.Option(None, "--agent", "-a", help="Agent command for adapters that require one."),
+    limit: int | None = typer.Option(None, "--limit", help="Maximum number of tasks per round."),
+    verification: list[str] | None = typer.Option(None, "--verify", help="Override verification commands."),
+    timeout: int | None = typer.Option(None, help="Agent timeout in seconds."),
+    rounds: int = typer.Option(2, "--rounds", help="Maximum flywheel rounds to execute."),
+    no_auto_promote: bool = typer.Option(False, "--no-auto-promote", help="Propose patches without writing skills."),
+    repo: Path = typer.Option(Path("."), help="Repository root."),
+) -> None:
+    """Run benchmark rounds, analyze failures, and promote harness skills."""
+    summary = get_harness(repo).flywheel(
+        repo_filter=repo_filter,
+        target_repo_path=target_repo_path,
+        adapter=adapter,
+        agent=agent,
+        limit=limit,
+        verification_commands=verification,
+        timeout=timeout,
+        rounds=rounds,
+        auto_promote=not no_auto_promote,
+    )
+    console.print(f"Flywheel: {summary.flywheel_id}")
+    console.print(f"Initial pass rate: {summary.initial_pass_rate:.1%}")
+    console.print(f"Final pass rate: {summary.final_pass_rate:.1%}")
+    console.print(f"Rounds: {len(summary.rounds)}")
+    if summary.report_path:
+        console.print(f"Report: {summary.report_path}")
+
+
+@flywheel_app.command("analyze")
+def flywheel_analyze_command(
+    benchmark_id: str = typer.Option("latest", "--benchmark-id", help="Benchmark summary id to analyze."),
+    repo: Path = typer.Option(Path("."), help="Repository root."),
+) -> None:
+    """Propose harness patches from a benchmark summary."""
+    patches = get_harness(repo).analyze_flywheel(benchmark_id)
+    table = Table("Patch", "Title", "Status", "Target")
+    for patch in patches:
+        table.add_row(patch.patch_id, patch.title, str(patch.status), patch.target_path)
+    console.print(table)
+
+
+@flywheel_app.command("promote")
+def flywheel_promote_command(
+    patch_id: str = typer.Argument(..., help="Harness patch id to promote into .harness/skills/."),
+    repo: Path = typer.Option(Path("."), help="Repository root."),
+) -> None:
+    """Promote a proposed harness patch into the active skills layer."""
+    patch = get_harness(repo).promote_patch(patch_id)
+    console.print(f"Promoted: {patch.patch_id}")
+    console.print(f"Skill: {patch.target_path}")
+
+
+@flywheel_app.command("status")
+def flywheel_status_command(
+    repo: Path = typer.Option(Path("."), help="Repository root."),
+) -> None:
+    """Show active skills, patches, and the latest flywheel summary."""
+    status = get_harness(repo).flywheel_status()
+    skills = status.get("skills") or []
+    console.print(f"Skills: {', '.join(skills) if skills else 'none'}")
+    latest = status.get("latest")
+    if latest:
+        console.print(f"Latest flywheel: {latest['flywheel_id']}")
+        console.print(f"Final pass rate: {latest['final_pass_rate']:.1%}")
+    patches = status.get("patches") or []
+    console.print(f"Patches tracked: {len(patches)}")
+
+
 @app.command()
 def run(
     task_id: str,

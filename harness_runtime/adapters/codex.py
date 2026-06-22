@@ -5,6 +5,7 @@ from pathlib import Path
 
 from harness_runtime.config import HarnessConfig
 from harness_runtime.adapters.base import AdapterExecution, AgentAdapter
+from harness_runtime.skills import append_harness_context
 
 
 def build_codex_prompt(
@@ -13,7 +14,9 @@ def build_codex_prompt(
     max_runtime_seconds: int,
     max_steps: int,
     max_patch_lines: int,
+    harness_context: str = "",
 ) -> str:
+    instructions = append_harness_context(instructions, harness_context)
     return "\n\n".join(
         [
             "You are running inside a repo-native harness workspace.",
@@ -50,6 +53,7 @@ class CodexAdapter(AgentAdapter):
             max_runtime_seconds=config.task_budget.max_runtime_seconds,
             max_steps=config.task_budget.max_steps,
             max_patch_lines=config.task_budget.max_patch_lines,
+            harness_context=env.get("HARNESS_SKILLS_CONTEXT", ""),
         )
         codex_config = config.codex
         last_message_path = artifact_path / "agent_last_message.txt"

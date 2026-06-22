@@ -57,11 +57,12 @@ harness verify latest --cleanup
 harness report
 ```
 
-For benchmark and reference-eval flows, start here:
+For benchmark, flywheel, and reference-eval flows, start here:
 
 - [Quick Start](docs/quickstart.md)
 - [CLI Guide](docs/cli.md)
 - [Benchmarks](docs/benchmarks.md)
+- [Harness Flywheel](docs/flywheel.md)
 
 ## Documentation
 

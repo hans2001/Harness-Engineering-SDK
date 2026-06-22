@@ -12,8 +12,10 @@ from pathlib import Path
 from harness_runtime.adapters import get_adapter
 from harness_runtime.config import harness_dir, load_config
 from harness_runtime.repo import capture_diff, cleanup_workspace, create_workspace
-from harness_runtime.schemas import RunRecord, RunStatus, TaskSpec, utc_now
+from harness_runtime.schemas import HarnessTraceEvent, RunRecord, RunStatus, TaskSpec, TraceEventKind, utc_now
+from harness_runtime.skills import append_harness_context, load_skills_context
 from harness_runtime.storage import Storage
+from harness_runtime.traces import append_trace_event, materialize_trace, record_verification_trace, trace_artifact_path
 
 
 def run_task(
@@ -77,6 +79,19 @@ def run_task(
             "HARNESS_TASK_BUDGET_MAX_PATCH_LINES": str(config.task_budget.max_patch_lines),
         }
     )
+    skills_context = load_skills_context(repo)
+    if skills_context:
+        env["HARNESS_SKILLS_CONTEXT"] = skills_context
+        env["HARNESS_INSTRUCTIONS"] = append_harness_context(task.instructions, skills_context)
+    append_trace_event(
+        trace_artifact_path(artifact_path),
+        HarnessTraceEvent(
+            event=TraceEventKind.run_started,
+            run_id=run_id,
+            task_id=task.id,
+            payload={"adapter": adapter_name, "skills_loaded": bool(skills_context)},
+        ),
+    )
     execution = adapter.build_execution(
         repo=repo,
         workspace_path=workspace_path,
@@ -131,9 +146,19 @@ def run_task(
         cleanup_workspace(task_repo_path, workspace_path)
         run.metadata["workspace_removed"] = True
     (artifact_path / "run.json").write_text(run.model_dump_json(indent=2))
-    (artifact_path / "trace.jsonl").write_text(
-        '{"event":"agent_completed","run_id":"%s","adapter":"%s","exit_code":%s}\n'
-        % (run_id, adapter_name, result.returncode)
+    append_trace_event(
+        trace_artifact_path(artifact_path),
+        HarnessTraceEvent(
+            event=TraceEventKind.agent_completed,
+            run_id=run_id,
+            task_id=task.id,
+            payload={
+                "adapter": adapter_name,
+                "exit_code": result.returncode,
+                "duration_seconds": duration,
+                "timed_out": timed_out,
+            },
+        ),
     )
     Storage(repo).save_run(run)
     return run

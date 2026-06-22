@@ -22,8 +22,10 @@ nav:
   - SDK: sdk.md
   - CLI: cli.md
   - Benchmarks: benchmarks.md
+  - Flywheel: flywheel.md
   - Architecture: architecture.md
   - Deep Dives:
+      - Flywheel Spec: spec/flywheel.md
       - Core Abstractions: CORE_ABSTRACTIONS.md
       - Plugin System: PLUGIN_SYSTEM.md
       - Multi-Language Model: MULTI_LANGUAGE.md

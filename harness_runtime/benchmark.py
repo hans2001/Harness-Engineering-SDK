@@ -173,4 +173,6 @@ def write_benchmark_report(repo: Path, summary: BenchmarkSummary) -> Path:
             lines.append("")
     lines.append("")
     report_path.write_text("\n".join(lines))
+    json_path = report_dir / f"{summary.benchmark_id}.json"
+    json_path.write_text(summary.model_dump_json(indent=2))
     return report_path

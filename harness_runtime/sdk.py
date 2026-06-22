@@ -16,9 +16,11 @@ from harness_runtime.preflight import run_preflight, task_preflight
 from harness_runtime.reports import generate_report
 from harness_runtime.runners import run_task
 from harness_runtime.schemas import (
+    BenchmarkSummary,
     EvalDatasetEntry,
     EvalSummary,
-    BenchmarkSummary,
+    FlywheelSummary,
+    HarnessPatch,
     PreflightResult,
     RunRecord,
     TaskSpec,
@@ -191,6 +193,50 @@ class Harness:
             verification_commands=verification_commands,
             timeout=timeout,
         )
+
+    def analyze_flywheel(self, benchmark_id: str = "latest") -> list[HarnessPatch]:
+        from harness_runtime.flywheel import analyze_benchmark_failures, load_benchmark_summary
+
+        summary = load_benchmark_summary(self.repo, benchmark_id)
+        return analyze_benchmark_failures(self.repo, summary)
+
+    def promote_patch(self, patch_id: str) -> HarnessPatch:
+        from harness_runtime.flywheel import promote_patch
+
+        return promote_patch(self.repo, patch_id)
+
+    def flywheel(
+        self,
+        *,
+        repo_filter: str,
+        target_repo_path: str,
+        adapter: str,
+        agent: str | None = None,
+        limit: int | None = None,
+        verification_commands: list[str] | None = None,
+        timeout: int | None = None,
+        rounds: int = 2,
+        auto_promote: bool = True,
+    ) -> FlywheelSummary:
+        from harness_runtime.flywheel import run_flywheel
+
+        return run_flywheel(
+            self.repo,
+            repo_filter=repo_filter,
+            target_repo_path=target_repo_path,
+            adapter=adapter,
+            agent=agent,
+            limit=limit,
+            verification_commands=verification_commands,
+            timeout=timeout,
+            rounds=rounds,
+            auto_promote=auto_promote,
+        )
+
+    def flywheel_status(self) -> dict[str, object]:
+        from harness_runtime.flywheel import flywheel_status
+
+        return flywheel_status(self.repo)
 
     def load_task(self, task_id: str) -> TaskSpec:
         path = Storage(self.repo).get_task_path(task_id)

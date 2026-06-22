@@ -8,8 +8,9 @@ from pathlib import Path
 
 from harness_runtime.preflight import check_command
 from harness_runtime.repo import cleanup_workspace
-from harness_runtime.schemas import CommandResult, RunStatus, TaskSpec, VerificationResult, utc_now
+from harness_runtime.schemas import CommandResult, HarnessTraceEvent, RunStatus, TaskSpec, TraceEventKind, VerificationResult, utc_now
 from harness_runtime.storage import Storage
+from harness_runtime.traces import append_trace_event, materialize_trace, record_verification_trace, trace_artifact_path
 
 
 def verify_run(repo: Path, run_id: str, task: TaskSpec, cleanup: bool = False) -> VerificationResult:
@@ -25,6 +26,15 @@ def verify_run(repo: Path, run_id: str, task: TaskSpec, cleanup: bool = False) -
     result = VerificationResult(run_id=run_id, task_id=task.id)
     log_dir = artifact_path / "verification"
     log_dir.mkdir(parents=True, exist_ok=True)
+    append_trace_event(
+        trace_artifact_path(artifact_path),
+        HarnessTraceEvent(
+            event=TraceEventKind.verification_started,
+            run_id=run_id,
+            task_id=task.id,
+            payload={"command_count": len(task.verification.commands)},
+        ),
+    )
 
     for index, command in enumerate(task.verification.commands, start=1):
         preflight = check_command(command, env=verification_env())
@@ -70,6 +80,19 @@ def verify_run(repo: Path, run_id: str, task: TaskSpec, cleanup: bool = False) -
                 failure_reason=None if completed.returncode == 0 else "Command exited non-zero.",
             )
         )
+        append_trace_event(
+            trace_artifact_path(artifact_path),
+            HarnessTraceEvent(
+                event=TraceEventKind.verification_command_finished,
+                run_id=run_id,
+                task_id=task.id,
+                payload={
+                    "command": command,
+                    "exit_code": completed.returncode,
+                    "passed": completed.returncode == 0,
+                },
+            ),
+        )
 
     result.ended_at = utc_now()
     result.passed = all(command.passed for command in result.commands)
@@ -85,6 +108,8 @@ def verify_run(repo: Path, run_id: str, task: TaskSpec, cleanup: bool = False) -
         run.metadata["workspace_removed"] = True
     storage.save_run(run)
     storage.save_verification(result)
+    record_verification_trace(artifact_path, run_id=run_id, task_id=task.id, verification=result)
+    materialize_trace(repo, run=run, task=task, verification=result)
     return result
 
 
