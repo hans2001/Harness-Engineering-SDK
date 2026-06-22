@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from harness_runtime.benchmark import run_reference_benchmark
 from harness_runtime.config import init_layout
 from harness_runtime.datasets import build_eval_summary, build_github_reference_dataset, materialize_eval_tasks
 from harness_runtime.harvesters import (
@@ -180,6 +179,8 @@ class Harness:
         verification_commands: list[str] | None = None,
         timeout: int | None = None,
     ) -> BenchmarkSummary:
+        from harness_runtime.benchmark import run_reference_benchmark
+
         return run_reference_benchmark(
             self.repo,
             repo_filter=repo_filter,

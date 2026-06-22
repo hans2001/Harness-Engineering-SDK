@@ -52,6 +52,16 @@ harness dataset \
 harness benchmark \
   --repo-filter owner/repo \
   --target-repo-path ../target-repo \
+  --adapter cursor \
+  --limit 5
+```
+
+Or with Codex:
+
+```bash
+harness benchmark \
+  --repo-filter owner/repo \
+  --target-repo-path ../target-repo \
   --adapter codex \
   --limit 5
 ```

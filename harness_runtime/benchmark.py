@@ -5,7 +5,7 @@ from collections import Counter
 from pathlib import Path
 
 from harness_runtime.config import harness_dir
-from harness_runtime.schemas import BenchmarkSummary, BenchmarkTaskResult, TaskSpec
+from harness_runtime.schemas import BenchmarkSummary, BenchmarkTaskResult
 
 
 def run_reference_benchmark(
